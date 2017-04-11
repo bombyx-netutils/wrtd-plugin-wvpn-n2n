@@ -1,0 +1,7 @@
+#!/bin/sh
+
+touch "/etc/dhcp/debug1.txt"         # fixme, test if mount namespace works
+
+make_resolv_conf() {
+    touch "/etc/dhcp/debug2.txt"     # fixme, test if /etc/resolv.conf is not overwritten
+}
