@@ -77,7 +77,7 @@ class _PluginObject:
 
         self.dhcpClientProc = subprocess.Popen([
             "/usr/bin/python3",
-            os.path.join(os.path.dirname(os.path.realpath(__file__)), "wvpn_n2n_subproc_dhclient.py"),
+            os.path.join(os.path.dirname(os.path.realpath(__file__)), "subproc_dhclient.py"),
             self.tmpDir,
             cfgf,
             self.vpnIntfName,
