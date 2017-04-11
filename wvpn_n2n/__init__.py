@@ -44,7 +44,7 @@ class _PluginObject:
         cmd += "-c %s " % (self.cfg["community"])
         cmd += "-k %s " % (self.cfg["key"])
         cmd += "-u %d -g %d " % (pwd.getpwnam("nobody").pw_uid, grp.getgrnam("nobody").gr_gid)
-        cmd += ">%s 2>&1" % (os.path.join(self.tmpDir, "vpn-n2n-edge.log"))
+        cmd += ">%s 2>&1" % (os.path.join(self.tmpDir, "wvpn-n2n-edge.log"))
         self.vpnProc = subprocess.Popen(cmd, shell=True, universal_newlines=True)
 
         # wait for interface
@@ -59,7 +59,7 @@ class _PluginObject:
             break
 
         # create dhclient.conf, copied from nm-dhcp-dhclient-utils.c in networkmanager-1.4.4
-        cfgf = os.path.join(self.tmpDir, "vpn-n2n-dhclient.conf")
+        cfgf = os.path.join(self.tmpDir, "wvpn-n2n-dhclient.conf")
         with open(cfgf, "w") as f:
             buf = ""
             buf += "send host-name \"%s\";\n" % (socket.gethostname())
@@ -77,7 +77,7 @@ class _PluginObject:
 
         self.dhcpClientProc = subprocess.Popen([
             "/usr/bin/python3",
-            os.path.join(os.path.dirname(os.path.realpath(__file__)), "vpn_n2n_subproc_dhclient.py"),
+            os.path.join(os.path.dirname(os.path.realpath(__file__)), "wvpn_n2n_subproc_dhclient.py"),
             self.tmpDir,
             cfgf,
             self.vpnIntfName,
