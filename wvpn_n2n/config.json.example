@@ -1,5 +1,5 @@
 {
-    "wan-vpn":"n2n",
+    "plugin":"n2n",
     "supernode":"1.2.3.4:7654",
     "community":"vpn",
     "key":"123456"
