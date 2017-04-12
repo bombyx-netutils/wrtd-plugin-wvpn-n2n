@@ -70,8 +70,8 @@ try:
     os.mkdir(tmpEtcDhcpDir)
     shutil.copy(os.path.join(selfDir, "dhclient-enter-hooks"), tmpEnterHook)
     shutil.copy(os.path.join(selfDir, "dhclient-exit-hooks"), tmpExitHook)
-    os.chmod(0o755, tmpEnterHook)
-    os.chmod(0o755, tmpExitHook)
+    os.chmod(tmpEnterHook, 0o755)
+    os.chmod(tmpExitHook, 0o755)
 
     with _UtilNewMountNamespace():
         # dhclient read custom scripts from the fixed location /etc/dhcp
