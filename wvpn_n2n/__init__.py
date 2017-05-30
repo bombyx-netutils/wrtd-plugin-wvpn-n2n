@@ -78,7 +78,7 @@ class _PluginObject:
     def get_prefix_list(self):
         if self.localIp is not None:
             netobj = ipaddress.IPv4Network(self.localIp, self.netmask, False)
-            return [(str(netobj.address), str(netobj.netmask))]
+            return [(str(netobj.network_address), str(netobj.netmask))]
         else:
             return None
 
