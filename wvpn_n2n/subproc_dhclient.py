@@ -44,7 +44,7 @@ class _UtilNewMountNamespace:
             if self._mount(srcdir, target, None, (self._MS_REC | self._MS_PRIVATE), None) != 0:
                 e = ctypes.get_errno()
                 raise OSError(e, errno.errorcode[e])
-        except:
+        except BaseException:
             self.parentfd.close()
             self.parentfd = None
             raise
