@@ -27,9 +27,9 @@ def get_plugin(name):
 
 class _PluginObject:
 
-    def init2(self, cfg, vpnIntfName, tmpDir, upCallback, downCallback):
+    def init2(self, cfg, tmpDir, upCallback, downCallback):
         self.cfg = cfg
-        self.vpnIntfName = vpnIntfName
+        self.vpnIntfName = "vpnc"
         self.tmpDir = tmpDir
         self.upCallback = upCallback
         self.downCallback = downCallback
@@ -49,9 +49,13 @@ class _PluginObject:
 
     def stop(self):
         self.vpnRestartCountDown = None
-        if True:
-            GLib.source_remove(self.vpnTimer)
-            self.vpnTimer = None
+
+        GLib.source_remove(self.vpnTimer)
+        self.vpnTimer = None
+
+        if self.vpnProc is not None:
+            self.downCallback()
+
         self._vpnStop()
 
     def is_alive(self):
@@ -66,6 +70,9 @@ class _PluginObject:
 
     def get_netmask(self):
         return self.netmask
+
+    def get_interface(self):
+        return self.vpnIntfName
 
     def _vpnTimerCallback(self):
         if self.vpnRestartCountDown is None:
