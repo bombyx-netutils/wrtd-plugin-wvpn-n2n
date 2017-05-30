@@ -9,6 +9,7 @@ import socket
 import signal
 import logging
 import netifaces
+import ipaddress
 import subprocess
 from gi.repository import GLib
 from gi.repository import GObject
@@ -73,6 +74,13 @@ class _PluginObject:
 
     def get_interface(self):
         return self.vpnIntfName
+
+    def get_prefix_list(self):
+        if self.localIp is not None:
+            netobj = ipaddress.IPv4Network(self.localIp, self.netmask, False)
+            return [(str(netobj.address), str(netobj.netmask))]
+        else:
+            return None
 
     def _vpnTimerCallback(self):
         if self.vpnRestartCountDown is None:
