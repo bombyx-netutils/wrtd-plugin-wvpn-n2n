@@ -57,11 +57,11 @@ class _PluginObject:
         bFlag = (self.vpnProc is not None)
         self._vpnStop()
         if bFlag:
+            self.logger.info("VPN disconnected.")
             self.downCallback()
 
-    def reconnect(self):
-        
-
+    def disconnect(self):
+        self.vpnProc.terminate()
 
     def is_alive(self):
         # VPN is alive so long as self._vpnStop() is not called for other modules
@@ -88,15 +88,13 @@ class _PluginObject:
 
     def _vpnTimerCallback(self):
         if self.vpnRestartCountDown is None:
-            if self._vpnCheck():
-                return True
-            else:
+            if not self._vpnCheck():
                 # vpn is in bad state, stop it now, restart it in the next cycle
                 self._vpnStop()
                 self.vpnRestartCountDown = 6
                 self.logger.info("VPN disconnected.")
                 self.downCallback()
-                return True
+            return True
 
         if self.vpnRestartCountDown > 0:
             self.vpnRestartCountDown -= 1
@@ -105,13 +103,14 @@ class _PluginObject:
         self.logger.info("Establishing VPN connection.")
         try:
             self._vpnStart()
-            self.logger.info("VPN connected.")
             self.upCallback()
         except Exception as e:
             self._vpnStop()
             self.vpnRestartCountDown = 6
             self.logger.error("Failed to establish VPN connection, %s", e)
+            return True
 
+        self.logger.info("VPN connected.")
         return True
 
     def _vpnStart(self):
