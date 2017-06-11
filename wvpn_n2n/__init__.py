@@ -54,10 +54,14 @@ class _PluginObject:
         GLib.source_remove(self.vpnTimer)
         self.vpnTimer = None
 
-        if self.vpnProc is not None:
+        bFlag = (self.vpnProc is not None)
+        self._vpnStop()
+        if bFlag:
             self.downCallback()
 
-        self._vpnStop()
+    def reconnect(self):
+        
+
 
     def is_alive(self):
         # VPN is alive so long as self._vpnStop() is not called for other modules
