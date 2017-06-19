@@ -63,8 +63,8 @@ class _PluginObject:
     def disconnect(self):
         self.vpnProc.terminate()
 
-    def is_alive(self):
-        # VPN is alive so long as self._vpnStop() is not called for other modules
+    def is_connected(self):
+        # VPN is in connected status so long as self._vpnStop() is not called for other modules
         return self.vpnProc is not None
 
     def get_local_ip(self):
