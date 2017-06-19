@@ -193,6 +193,10 @@ class _PluginObject:
             self.vpnProc = None
 
     def _vpnCheck(self):
+        if self.vpnProc is None:
+            return False
+        if self.dhcpClientProc is None:
+            return False
         if self.vpnProc.poll():
             return False
         if self.dhcpClientProc.poll():
