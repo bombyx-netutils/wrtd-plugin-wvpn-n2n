@@ -10,6 +10,7 @@ import signal
 import logging
 import netifaces
 import ipaddress
+import threading
 import subprocess
 from gi.repository import GLib
 from gi.repository import GObject
@@ -36,6 +37,7 @@ class _PluginObject:
         self.downCallback = downCallback
         self.logger = logging.getLogger(self.__module__ + "." + self.__class__.__name__)
 
+        self.vpnRestartCountDown = None
         self.vpnTimer = None
 
         self.vpnProc = None
@@ -43,22 +45,26 @@ class _PluginObject:
         self.localIp = None
         self.remoteIp = None
         self.netmask = None
-        self.vpnRestartCountDown = None
+        self.waitIpThread = None
 
     def start(self):
+        self.vpnRestartCountDown = 0
         self.vpnTimer = GObject.timeout_add_seconds(10, self._vpnTimerCallback)
 
     def stop(self):
-        self.vpnRestartCountDown = None
-
-        GLib.source_remove(self.vpnTimer)
-        self.vpnTimer = None
+        if self.waitIpThread is not None:
+            self.waitIpThread.stop()
+            self.waitIpThread.join()
 
         bFlag = (self.vpnProc is not None)
         self._vpnStop()
         if bFlag:
             self.logger.info("VPN disconnected.")
             self.downCallback()
+
+        GLib.source_remove(self.vpnTimer)
+        self.vpnTimer = None
+        self.vpnRestartCountDown = None
 
     def disconnect(self):
         self.vpnProc.terminate()
@@ -80,11 +86,8 @@ class _PluginObject:
         return self.vpnIntfName
 
     def get_prefix_list(self):
-        if self.localIp is not None:
-            netobj = ipaddress.IPv4Network(self.localIp + "/" + self.netmask, strict=False)
-            return [(str(netobj.network_address), str(netobj.netmask))]
-        else:
-            return None
+        netobj = ipaddress.IPv4Network(self.localIp + "/" + self.netmask, strict=False)
+        return [(str(netobj.network_address), str(netobj.netmask))]
 
     def _vpnTimerCallback(self):
         if self.vpnRestartCountDown is None:
@@ -103,81 +106,65 @@ class _PluginObject:
         self.logger.info("Establishing VPN connection.")
         try:
             self._vpnStart()
-            self.upCallback()
+            self.vpnRestartCountDown = None
         except Exception as e:
             self._vpnStop()
             self.vpnRestartCountDown = 6
             self.logger.error("Failed to establish VPN connection, %s", e)
-            return True
 
-        self.logger.info("VPN connected.")
         return True
 
     def _vpnStart(self):
-        try:
-            # run n2n edge process
-            cmd = "/usr/sbin/edge -f "
-            cmd += "-l %s " % (self.cfg["supernode"])
-            cmd += "-r -a dhcp:0.0.0.0 "
-            cmd += "-d %s " % (self.vpnIntfName)
-            cmd += "-c %s " % (self.cfg["community"])
-            cmd += "-k %s " % (self.cfg["key"])
-            cmd += "-u %d -g %d " % (pwd.getpwnam("nobody").pw_uid, grp.getgrnam("nobody").gr_gid)
-            cmd += ">%s 2>&1" % (os.path.join(self.tmpDir, "edge.log"))
-            self.vpnProc = subprocess.Popen(cmd, shell=True, universal_newlines=True)
+        # run n2n edge process
+        cmd = "/usr/sbin/edge -f "
+        cmd += "-l %s " % (self.cfg["supernode"])
+        cmd += "-r -a dhcp:0.0.0.0 "
+        cmd += "-d %s " % (self.vpnIntfName)
+        cmd += "-c %s " % (self.cfg["community"])
+        cmd += "-k %s " % (self.cfg["key"])
+        cmd += "-u %d -g %d " % (pwd.getpwnam("nobody").pw_uid, grp.getgrnam("nobody").gr_gid)
+        cmd += ">%s 2>&1" % (os.path.join(self.tmpDir, "edge.log"))
+        self.vpnProc = subprocess.Popen(cmd, shell=True, universal_newlines=True)
 
-            # wait for interface
-            i = 0
-            while True:
-                if self.vpnIntfName not in netifaces.interfaces():
-                    if i >= 10:
-                        raise Exception("Interface allocation time out.")
-                    time.sleep(1.0)
-                    i += 1
-                    continue
-                break
+        # wait for interface
+        i = 0
+        while True:
+            if self.vpnIntfName not in netifaces.interfaces():
+                if i >= 10:
+                    raise Exception("Interface allocation time out.")
+                time.sleep(1.0)
+                i += 1
+                continue
+            break
 
-            # create dhclient.conf, copied from nm-dhcp-dhclient-utils.c in networkmanager-1.4.4
-            cfgf = os.path.join(self.tmpDir, "dhclient.conf")
-            with open(cfgf, "w") as f:
-                buf = ""
-                buf += "send host-name \"%s\";\n" % (socket.gethostname())
-                buf += "\n"
-                buf += "option rfc3442-classless-static-routes code 121 = array of unsigned integer 8;\n"
-                buf += "option wpad code 252 = string;\n"
-                buf += "\n"
-                buf += "also request rfc3442-classless-static-routes;\n"
-                buf += "also request static-routes;\n"
-                buf += "also request wpad;\n"
-                buf += "also request ntp-servers;\n"
-                buf += "\n"
-                buf += "supersede routers 0.0.0.0;\n"               # reject, no way to remove an option, it is just a workaround, dhclient sucks
-                f.write(buf)
+        # create dhclient.conf, copied from nm-dhcp-dhclient-utils.c in networkmanager-1.4.4
+        cfgf = os.path.join(self.tmpDir, "dhclient.conf")
+        with open(cfgf, "w") as f:
+            buf = ""
+            buf += "send host-name \"%s\";\n" % (socket.gethostname())
+            buf += "\n"
+            buf += "option rfc3442-classless-static-routes code 121 = array of unsigned integer 8;\n"
+            buf += "option wpad code 252 = string;\n"
+            buf += "\n"
+            buf += "also request rfc3442-classless-static-routes;\n"
+            buf += "also request static-routes;\n"
+            buf += "also request wpad;\n"
+            buf += "also request ntp-servers;\n"
+            buf += "\n"
+            buf += "supersede routers 0.0.0.0;\n"               # reject, no way to remove an option, it is just a workaround, dhclient sucks
+            f.write(buf)
 
-            self.dhcpClientProc = subprocess.Popen([
-                "/usr/bin/python3",
-                os.path.join(os.path.dirname(os.path.realpath(__file__)), "subproc_dhclient.py"),
-                self.tmpDir,
-                cfgf,
-                self.vpnIntfName,
-            ])
+        self.dhcpClientProc = subprocess.Popen([
+            "/usr/bin/python3",
+            os.path.join(os.path.dirname(os.path.realpath(__file__)), "subproc_dhclient.py"),
+            self.tmpDir,
+            cfgf,
+            self.vpnIntfName,
+        ])
 
-            # wait for ip address
-            i = 0
-            while True:
-                t = netifaces.ifaddresses(self.vpnIntfName)
-                if 2 not in t:
-                    if i >= 10:
-                        raise Exception("IP address allocation time out.")
-                    time.sleep(1.0)
-                    i += 1
-                    continue
-                self.localIp = t[2][0]["addr"]
-                self.remoteIp = ".".join(self.localIp.split(".")[:3] + ["1"])         # trick
-                self.netmask = t[2][0]["netmask"]
-                break
-        except BaseException:
-            self._vpnStop()
+        # start wait ip thread
+        self.waitIpThread = _WaitIpThread(self)
+        self.waitIpThread.start()
 
     def _vpnStop(self):
         self.netmask = None
@@ -202,3 +189,44 @@ class _PluginObject:
         if self.dhcpClientProc.poll():
             return False
         return True
+
+    def _vpnUpCallback(self):
+        t = netifaces.ifaddresses(self.vpnIntfName)
+        self.localIp = t[netifaces.AF_INET][0]["addr"]
+        self.remoteIp = ".".join(self.localIp.split(".")[:3] + ["1"])         # trick
+        self.netmask = t[netifaces.AF_INET][0]["netmask"]
+        self.upCallback()
+
+
+class _WaitIpThread(threading.Thread):
+
+    def __init__(self, pObj):
+        super().__init__()
+        self.pObj = pObj
+        self.bStop = False
+
+    def run(self):
+        count = 0
+        while not self.bStop:
+            if netifaces.AF_INET in netifaces.ifaddresses(self.pObj.vpnIntfName):
+                count += 1
+            else:
+                count = 0
+            if count >= 3:
+                _Util.idleInvoke(self.pObj._vpnUpCallback)      # ip address must be stablized for 3 seconds
+                break
+            time.sleep(1.0)
+        self.pObj.waitIpThread = None
+
+    def stop(self):
+        self.bStop = True
+
+
+class _Util:
+
+    @staticmethod
+    def idleInvoke(func, *args):
+        def _idleCallback(func, *args):
+            func(*args)
+            return False
+        GLib.idle_add(_idleCallback, func, *args)
