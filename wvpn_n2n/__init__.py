@@ -191,11 +191,23 @@ class _PluginObject:
         return True
 
     def _vpnUpCallback(self):
-        t = netifaces.ifaddresses(self.vpnIntfName)
-        self.localIp = t[netifaces.AF_INET][0]["addr"]
-        self.remoteIp = ".".join(self.localIp.split(".")[:3] + ["1"])         # trick
-        self.netmask = t[netifaces.AF_INET][0]["netmask"]
-        self.upCallback()
+        try:
+            t = netifaces.ifaddresses(self.vpnIntfName)
+            self.localIp = t[netifaces.AF_INET][0]["addr"]
+            self.remoteIp = ".".join(self.localIp.split(".")[:3] + ["1"])         # trick
+            self.netmask = t[netifaces.AF_INET][0]["netmask"]
+            self.logger.info("VPN connected.")
+        except Exception as e:
+            self._vpnStop()
+            self.vpnRestartCountDown = 6
+            self.logger.error("Failed to establish VPN connection, %s", e)
+
+        try:
+            self.upCallback()
+        except Exception as e:
+            self._vpnStop()
+            self.vpnRestartCountDown = 6
+            self.logger.error("VPN disconnected because internal error occured, %s", e)
 
 
 class _WaitIpThread(threading.Thread):
