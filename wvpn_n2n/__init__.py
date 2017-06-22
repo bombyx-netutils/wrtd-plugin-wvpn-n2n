@@ -60,14 +60,15 @@ class _PluginObject:
         self._vpnStop()
         if bFlag:
             self.downCallback()
-            self.logger.info("VPN disconnected.")
+            self.logger.info("CASCADE-VPN disconnected.")
 
         GLib.source_remove(self.vpnTimer)
         self.vpnTimer = None
         self.vpnRestartCountDown = None
 
     def disconnect(self):
-        self.vpnProc.terminate()
+        if self.vpnProc is not None:
+            self.vpnProc.terminate()
 
     def is_connected(self):
         # VPN is in connected status so long as self._vpnStop() is not called for other modules
@@ -96,21 +97,21 @@ class _PluginObject:
                 self._vpnStop()
                 self.vpnRestartCountDown = 6
                 self.downCallback()
-                self.logger.info("VPN disconnected.")
+                self.logger.info("CASCADE-VPN disconnected.")
             return True
 
         if self.vpnRestartCountDown > 0:
             self.vpnRestartCountDown -= 1
             return True
 
-        self.logger.info("Establishing VPN connection.")
+        self.logger.info("Establishing CASCADE-VPN connection.")
         try:
             self._vpnStart()
             self.vpnRestartCountDown = None
         except Exception as e:
             self._vpnStop()
             self.vpnRestartCountDown = 6
-            self.logger.error("Failed to establish VPN connection, %s", e)
+            self.logger.error("Failed to establish CASCADE-VPN connection, %s", e)
 
         return True
 
@@ -196,18 +197,18 @@ class _PluginObject:
             self.localIp = t[netifaces.AF_INET][0]["addr"]
             self.remoteIp = ".".join(self.localIp.split(".")[:3] + ["1"])         # trick
             self.netmask = t[netifaces.AF_INET][0]["netmask"]
-            self.logger.info("VPN connected.")
+            self.logger.info("CASCADE-VPN connected.")
         except Exception as e:
             self._vpnStop()
             self.vpnRestartCountDown = 6
-            self.logger.error("Failed to establish VPN connection, %s", e)
+            self.logger.error("Failed to establish CASCADE-VPN connection, %s", e)
 
         try:
             self.upCallback()
         except Exception as e:
             self._vpnStop()
             self.vpnRestartCountDown = 6
-            self.logger.error("VPN disconnected because internal error occured, %s", e)
+            self.logger.error("CASCADE-VPN disconnected because internal error occured, %s", e)
 
 
 class _WaitIpThread(threading.Thread):
