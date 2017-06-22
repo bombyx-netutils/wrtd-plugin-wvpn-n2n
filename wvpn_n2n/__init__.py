@@ -59,8 +59,8 @@ class _PluginObject:
         bFlag = (self.vpnProc is not None)
         self._vpnStop()
         if bFlag:
-            self.logger.info("VPN disconnected.")
             self.downCallback()
+            self.logger.info("VPN disconnected.")
 
         GLib.source_remove(self.vpnTimer)
         self.vpnTimer = None
@@ -95,8 +95,8 @@ class _PluginObject:
                 # vpn is in bad state, stop it now, restart it in the next cycle
                 self._vpnStop()
                 self.vpnRestartCountDown = 6
-                self.logger.info("VPN disconnected.")
                 self.downCallback()
+                self.logger.info("VPN disconnected.")
             return True
 
         if self.vpnRestartCountDown > 0:
