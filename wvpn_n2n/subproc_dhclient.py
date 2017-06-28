@@ -81,8 +81,8 @@ try:
         cmd = "/sbin/dhclient "
         cmd += "-d --no-pid "
         cmd += "-cf %s " % (cfgf)
-        cmd += "-lf %s " % (os.path.join(tmpDir, "vpn-n2n-dhclient.leases"))
-        cmd += "%s >/dev/null 2>&1" % (vpnIntfName)
+        cmd += "-lf %s " % (os.path.join(tmpDir, "dhclient.leases"))
+        cmd += "%s >%s 2>&1" % (vpnIntfName, os.path.join(tmpDir, "dhclient.out"))
 
         proc = subprocess.Popen(cmd, shell=True, universal_newlines=True)
         proc.wait()

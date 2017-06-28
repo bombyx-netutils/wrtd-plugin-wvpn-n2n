@@ -120,7 +120,7 @@ class _PluginObject:
         cmd += "-c %s " % (self.cfg["community"])
         cmd += "-k %s " % (self.cfg["key"])
         cmd += "-u %d -g %d " % (pwd.getpwnam("nobody").pw_uid, grp.getgrnam("nobody").gr_gid)
-        cmd += ">%s 2>&1" % (os.path.join(self.tmpDir, "edge.log"))
+        cmd += ">%s 2>&1" % (os.path.join(self.tmpDir, "edge.out"))
         self.vpnProc = subprocess.Popen(cmd, shell=True, universal_newlines=True)
 
         # wait for interface
