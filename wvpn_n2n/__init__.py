@@ -63,7 +63,7 @@ class _PluginObject:
             self.vpnRestartTimer = None
 
     def disconnect(self):
-        if self.vpnProc is not None:
+        if self.vpnProc is not None and not self.vpnProc.poll():
             self.vpnProc.terminate()
 
     def is_connected(self):
@@ -98,7 +98,7 @@ class _PluginObject:
         finally:
             return False
 
-    def _vpnChildWatchCallback(self):
+    def _vpnChildWatchCallback(self, pid, condition):
         self._vpnStop()
         self.downCallback()
         self.logger.info("CASCADE-VPN disconnected.")
@@ -178,11 +178,13 @@ class _PluginObject:
             self.waitIpThread = None
 
         if self.dhcpClientProc is not None:
-            self.dhcpClientProc.send_signal(signal.SIGINT)      # dhcpClientProc is written in python, kill it gracefully
+            if not self.dhcpClientProc.poll():
+                self.dhcpClientProc.send_signal(signal.SIGINT)      # dhcpClientProc is written in python, kill it gracefully
             self.dhcpClientProc.wait()
             self.dhcpClientProc = None
         if self.vpnProc is not None:
-            self.vpnProc.terminate()
+            if not self.vpnProc.poll():
+                self.vpnProc.terminate()
             self.vpnProc.wait()
             self.vpnProc = None
 
