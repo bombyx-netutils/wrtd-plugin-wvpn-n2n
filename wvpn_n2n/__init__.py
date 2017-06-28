@@ -55,8 +55,9 @@ class _PluginObject:
 
     def stop(self):
         if self.vpnProc is not None:
+            if self.localIp is not None:
+                self.downCallback()
             self._vpnStop()
-            self.downCallback()
             self.logger.info("CASCADE-VPN disconnected.")
         else:
             GLib.source_remove(self.vpnRestartTimer)
@@ -99,8 +100,9 @@ class _PluginObject:
             return False
 
     def _vpnChildWatchCallback(self, pid, condition):
+        if self.localIp is not None:
+            self.downCallback()
         self._vpnStop()
-        self.downCallback()
         self.logger.info("CASCADE-VPN disconnected.")
         self.vpnRestartTimer = GObject.timeout_add_seconds(self.vpnRestartInterval, self._vpnRestartTimerCallback)
 
