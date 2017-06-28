@@ -106,9 +106,9 @@ class _PluginObject:
             bFlag = True
         self._vpnStop()
         if bFlag:
-            self.logger.error("Failed to establish CASCADE-VPN connection")
-        else:
             self.logger.info("CASCADE-VPN disconnected.")
+        else:
+            self.logger.error("Failed to establish CASCADE-VPN connection")
         self.vpnRestartTimer = GObject.timeout_add_seconds(self.vpnRestartInterval, self._vpnRestartTimerCallback)
 
     def _vpnStart(self):
