@@ -37,34 +37,30 @@ class _PluginObject:
         self.downCallback = downCallback
         self.logger = logging.getLogger(self.__module__ + "." + self.__class__.__name__)
 
-        self.vpnRestartCountDown = None
-        self.vpnTimer = None
+        self.vpnRestartInterval = 60        # in seconds
+        self.vpnRestartTimer = None
 
         self.vpnProc = None
+        self.vpnProcWatch = None
         self.dhcpClientProc = None
+        self.dhcpClientProcWatch = None
+
         self.localIp = None
         self.remoteIp = None
         self.netmask = None
         self.waitIpThread = None
 
     def start(self):
-        self.vpnRestartCountDown = 0
-        self.vpnTimer = GObject.timeout_add_seconds(10, self._vpnTimerCallback)
+        self.vpnRestartTimer = GObject.timeout_add_seconds(0, self._vpnRestartTimerCallback)
 
     def stop(self):
-        if self.waitIpThread is not None:
-            self.waitIpThread.stop()
-            self.waitIpThread.join()
-
-        bFlag = (self.vpnProc is not None)
-        self._vpnStop()
-        if bFlag:
+        if self.vpnProc is not None:
+            self._vpnStop()
             self.downCallback()
             self.logger.info("CASCADE-VPN disconnected.")
-
-        GLib.source_remove(self.vpnTimer)
-        self.vpnTimer = None
-        self.vpnRestartCountDown = None
+        else:
+            GLib.source_remove(self.vpnRestartTimer)
+            self.vpnRestartTimer = None
 
     def disconnect(self):
         if self.vpnProc is not None:
@@ -90,30 +86,23 @@ class _PluginObject:
         netobj = ipaddress.IPv4Network(self.localIp + "/" + self.netmask, strict=False)
         return [(str(netobj.network_address), str(netobj.netmask))]
 
-    def _vpnTimerCallback(self):
-        if self.vpnRestartCountDown is None:
-            if not self._vpnCheck():
-                # vpn is in bad state, stop it now, restart it in the next cycle
-                self._vpnStop()
-                self.vpnRestartCountDown = 6
-                self.downCallback()
-                self.logger.info("CASCADE-VPN disconnected.")
-            return True
-
-        if self.vpnRestartCountDown > 0:
-            self.vpnRestartCountDown -= 1
-            return True
-
+    def _vpnRestartTimerCallback(self):
         self.logger.info("Establishing CASCADE-VPN connection.")
         try:
             self._vpnStart()
-            self.vpnRestartCountDown = None
+            self.vpnRestartTimer = None
         except Exception as e:
             self._vpnStop()
-            self.vpnRestartCountDown = 6
             self.logger.error("Failed to establish CASCADE-VPN connection, %s", e)
+            self.vpnRestartTimer = GObject.timeout_add_seconds(self.vpnRestartInterval, self._vpnRestartTimerCallback)
+        finally:
+            return False
 
-        return True
+    def _vpnChildWatchCallback(self):
+        self._vpnStop()
+        self.downCallback()
+        self.logger.info("CASCADE-VPN disconnected.")
+        self.vpnRestartTimer = GObject.timeout_add_seconds(self.vpnRestartInterval, self._vpnRestartTimerCallback)
 
     def _vpnStart(self):
         # run n2n edge process
@@ -167,10 +156,27 @@ class _PluginObject:
         self.waitIpThread = _WaitIpThread(self)
         self.waitIpThread.start()
 
+        # start child watch
+        self.vpnProcWatch = GLib.child_watch_add(self.vpnProc.pid, self._vpnChildWatchCallback)
+        self.dhcpClientProcWatch = GLib.child_watch_add(self.dhcpClientProc.pid, self._vpnChildWatchCallback)
+
     def _vpnStop(self):
         self.netmask = None
         self.remoteIp = None
         self.localIp = None
+
+        if self.dhcpClientProcWatch is not None:
+            GLib.source_remove(self.dhcpClientProcWatch)
+            self.dhcpClientProcWatch = None
+        if self.vpnProcWatch is not None:
+            GLib.source_remove(self.vpnProcWatch)
+            self.vpnProcWatch = None
+
+        if self.waitIpThread is not None:
+            self.waitIpThread.stop()
+            self.waitIpThread.join()
+            self.waitIpThread = None
+
         if self.dhcpClientProc is not None:
             self.dhcpClientProc.send_signal(signal.SIGINT)      # dhcpClientProc is written in python, kill it gracefully
             self.dhcpClientProc.wait()
@@ -179,17 +185,6 @@ class _PluginObject:
             self.vpnProc.terminate()
             self.vpnProc.wait()
             self.vpnProc = None
-
-    def _vpnCheck(self):
-        if self.vpnProc is None:
-            return False
-        if self.dhcpClientProc is None:
-            return False
-        if self.vpnProc.poll():
-            return False
-        if self.dhcpClientProc.poll():
-            return False
-        return True
 
     def _vpnUpCallback(self):
         try:
@@ -200,15 +195,15 @@ class _PluginObject:
             self.logger.info("CASCADE-VPN connected.")
         except Exception as e:
             self._vpnStop()
-            self.vpnRestartCountDown = 6
             self.logger.error("Failed to establish CASCADE-VPN connection, %s", e)
+            self.vpnRestartTimer = GObject.timeout_add_seconds(self.vpnRestartInterval, self._vpnRestartTimerCallback)
 
         try:
             self.upCallback()
         except Exception as e:
             self._vpnStop()
-            self.vpnRestartCountDown = 6
             self.logger.error("CASCADE-VPN disconnected because internal error occured, %s", e)
+            self.vpnRestartTimer = GObject.timeout_add_seconds(self.vpnRestartInterval, self._vpnRestartTimerCallback)
 
 
 class _WaitIpThread(threading.Thread):
