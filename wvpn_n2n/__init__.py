@@ -100,10 +100,15 @@ class _PluginObject:
             return False
 
     def _vpnChildWatchCallback(self, pid, condition):
+        bFlag = False
         if self.localIp is not None:
             self.downCallback()
+            bFlag = True
         self._vpnStop()
-        self.logger.info("CASCADE-VPN disconnected.")
+        if bFlag:
+            self.logger.error("Failed to establish CASCADE-VPN connection")
+        else:
+            self.logger.info("CASCADE-VPN disconnected.")
         self.vpnRestartTimer = GObject.timeout_add_seconds(self.vpnRestartInterval, self._vpnRestartTimerCallback)
 
     def _vpnStart(self):
