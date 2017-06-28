@@ -40,8 +40,9 @@ class _PluginObject:
         self.vpnRestartInterval = 60        # in seconds
         self.vpnRestartTimer = None
 
-        self.vpnProc = None
-        self.vpnProcWatch = None
+        self.vpnCheckInterval = 10          # in seconds
+        self.vpnCheckTimer = None
+
         self.dhcpClientProc = None
         self.dhcpClientProcWatch = None
 
@@ -54,7 +55,7 @@ class _PluginObject:
         self.vpnRestartTimer = GObject.timeout_add_seconds(0, self._vpnRestartTimerCallback)
 
     def stop(self):
-        if self.vpnProc is not None:
+        if self.vpnIntfName in netifaces.interfaces():
             if self.localIp is not None:
                 self.downCallback()
             self._vpnStop()
@@ -64,12 +65,10 @@ class _PluginObject:
             self.vpnRestartTimer = None
 
     def disconnect(self):
-        if self.vpnProc is not None and self.vpnProc.poll() is None:
-            self.vpnProc.terminate()
+        self._stopEdge()
 
     def is_connected(self):
-        # VPN is in connected status so long as self._vpnStop() is not called for other modules
-        return self.vpnProc is not None
+        return self.vpnIntfName in netifaces.interfaces()
 
     def get_local_ip(self):
         return self.localIp
@@ -99,8 +98,27 @@ class _PluginObject:
         finally:
             return False
 
+    def _vpnCheckTimerCallback(self):
+        # it is a bad function
+        # we should add child-watch to /usr/sbin/edge but /usr/sbin/edge forks itself to an unknown pid
+
+        if self.vpnIntfName in netifaces.interfaces():
+            return True
+
+        bFlag = False
+        if self.localIp is not None:
+            self.downCallback()
+            bFlag = True
+        self._vpnStop()
+        if bFlag:
+            self.logger.info("CASCADE-VPN disconnected.")
+        else:
+            self.logger.error("Failed to establish CASCADE-VPN connection")
+        self.vpnRestartTimer = GObject.timeout_add_seconds(self.vpnRestartInterval, self._vpnRestartTimerCallback)
+        return False
+
     def _vpnChildWatchCallback(self, pid, condition):
-        assert pid == self.vpnProc.pid or pid == self.dhcpClientProc.pid
+        assert pid == self.dhcpClientProc.pid
 
         bFlag = False
         if self.localIp is not None:
@@ -115,6 +133,9 @@ class _PluginObject:
 
     def _vpnStart(self):
         # run n2n edge process
+        # it sucks that /usr/sbin/edge forks itself to a new process can there's no way for us to know the PID of the new process.
+        # so we use its management interface (UDP 5644) to control /usr/sbin/edge.
+        # it also sucks that we can run only one edge process in a machine, so wrtd-plugin-wvpn-n2n and wrtd-plugin-vpns-n2n is mutal-exclusive.
         cmd = "/usr/sbin/edge -f "
         cmd += "-l %s " % (self.cfg["supernode"])
         cmd += "-r -a dhcp:0.0.0.0 "
@@ -123,7 +144,7 @@ class _PluginObject:
         cmd += "-k %s " % (self.cfg["key"])
         cmd += "-u %d -g %d " % (pwd.getpwnam("nobody").pw_uid, grp.getgrnam("nobody").gr_gid)
         cmd += ">%s 2>&1" % (os.path.join(self.tmpDir, "edge.out"))
-        self.vpnProc = subprocess.Popen(cmd, shell=True, universal_newlines=True)
+        subprocess.Popen(cmd, shell=True, universal_newlines=True)
 
         # wait for interface
         i = 0
@@ -166,7 +187,7 @@ class _PluginObject:
         self.waitIpThread.start()
 
         # start child watch
-        self.vpnProcWatch = GLib.child_watch_add(self.vpnProc.pid, self._vpnChildWatchCallback)
+        self.vpnCheckTimer = GObject.timeout_add_seconds(self.vpnCheckInterval, self._vpnCheckTimerCallback)
         self.dhcpClientProcWatch = GLib.child_watch_add(self.dhcpClientProc.pid, self._vpnChildWatchCallback)
 
     def _vpnStop(self):
@@ -177,9 +198,9 @@ class _PluginObject:
         if self.dhcpClientProcWatch is not None:
             GLib.source_remove(self.dhcpClientProcWatch)
             self.dhcpClientProcWatch = None
-        if self.vpnProcWatch is not None:
-            GLib.source_remove(self.vpnProcWatch)
-            self.vpnProcWatch = None
+        if self.vpnCheckTimer is not None:
+            GLib.source_remove(self.vpnCheckTimer)
+            self.vpnCheckTimer = None
 
         if self.waitIpThread is not None:
             self.waitIpThread.stop()
@@ -191,12 +212,10 @@ class _PluginObject:
                 self.dhcpClientProc.send_signal(signal.SIGINT)      # dhcpClientProc is written in python, kill it gracefully
                 self.dhcpClientProc.wait()
             self.dhcpClientProc = None
-        if self.vpnProc is not None:
-            if self.vpnProc.poll() is None:
-                self.vpnProc.terminate()
-                self.vpnProc.wait()
-            assert self.vpnIntfName not in netifaces.interfaces()
-            self.vpnProc = None
+        if self.vpnIntfName in netifaces.interfaces():
+            self._stopEdge()
+            while self.vpnIntfName not in netifaces.interfaces():
+                time.sleep(1.0)
 
     def _vpnUpCallback(self):
         try:
@@ -216,6 +235,11 @@ class _PluginObject:
             self._vpnStop()
             self.logger.error("CASCADE-VPN disconnected because internal error occured, %s", e)
             self.vpnRestartTimer = GObject.timeout_add_seconds(self.vpnRestartInterval, self._vpnRestartTimerCallback)
+
+    def _stopEdge(self):
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.sendto("stop".encode("utf-8"), ('127.0.0.1', 5644))
+        s.close()
 
 
 class _WaitIpThread(threading.Thread):
