@@ -187,12 +187,12 @@ class _PluginObject:
         if self.dhcpClientProc is not None:
             if not self.dhcpClientProc.poll():
                 self.dhcpClientProc.send_signal(signal.SIGINT)      # dhcpClientProc is written in python, kill it gracefully
-            self.dhcpClientProc.wait()
+                self.dhcpClientProc.wait()
             self.dhcpClientProc = None
         if self.vpnProc is not None:
             if not self.vpnProc.poll():
                 self.vpnProc.terminate()
-            self.vpnProc.wait()
+                self.vpnProc.wait()
             self.vpnProc = None
 
     def _vpnUpCallback(self):
