@@ -82,7 +82,7 @@ try:
 
         cmd = "/sbin/dhclient "
         cmd += "-d "
-        cmd += "-df %s " % (pidFile)
+        cmd += "-pf %s " % (pidFile)
         cmd += "-cf %s " % (cfgf)
         cmd += "-lf %s " % (leaseFile)
         cmd += "%s >%s 2>&1" % (vpnIntfName, os.path.join(tmpDir, "dhclient.out"))
