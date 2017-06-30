@@ -87,7 +87,7 @@ try:
         proc = subprocess.Popen(cmd, shell=True, universal_newlines=True)
         proc.wait()
 except KeyboardInterrupt:
-    if proc is not None and not proc.poll():
+    if proc is not None and proc.poll() is None:
         proc.terminate()
         proc.wait()
 finally:

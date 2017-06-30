@@ -65,7 +65,10 @@ class _PluginObject:
             self.vpnRestartTimer = None
 
     def disconnect(self):
-        self._stopEdge()
+        # disconnect by killing dhclient process, it is faster than killing n2n-edge process
+        if self.dhcpClientProc is not None:
+            if self.dhcpClientProc.poll() is None:
+                self.dhcpClientProc.send_signal(signal.SIGINT)      # dhcpClientProc is written in python, kill it gracefully
 
     def is_connected(self):
         return self.vpnIntfName in netifaces.interfaces()
@@ -213,7 +216,9 @@ class _PluginObject:
                 self.dhcpClientProc.wait()
             self.dhcpClientProc = None
         if self.vpnIntfName in netifaces.interfaces():
-            self._stopEdge()
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)    # kill n2n-edge process using control channel
+            s.sendto("stop".encode("utf-8"), ('127.0.0.1', 5644))
+            s.close()
             while self.vpnIntfName not in netifaces.interfaces():
                 time.sleep(1.0)
 
@@ -235,11 +240,6 @@ class _PluginObject:
             self._vpnStop()
             self.logger.error("CASCADE-VPN disconnected because internal error occured, %s", e)
             self.vpnRestartTimer = GObject.timeout_add_seconds(self.vpnRestartInterval, self._vpnRestartTimerCallback)
-
-    def _stopEdge(self):
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.sendto("stop".encode("utf-8"), ('127.0.0.1', 5644))
-        s.close()
 
 
 class _WaitIpThread(threading.Thread):
