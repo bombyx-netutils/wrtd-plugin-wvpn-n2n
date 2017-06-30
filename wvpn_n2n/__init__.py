@@ -68,7 +68,7 @@ class _PluginObject:
         # disconnect by killing dhclient process, it is faster than killing n2n-edge process
         if self.dhcpClientProc is not None:
             if self.dhcpClientProc.poll() is None:
-                self.dhcpClientProc.send_signal(signal.SIGINT)      # dhcpClientProc is written in python, kill it gracefully
+                self._stopDhcpClient()
 
     def is_connected(self):
         return self.vpnIntfName in netifaces.interfaces()
