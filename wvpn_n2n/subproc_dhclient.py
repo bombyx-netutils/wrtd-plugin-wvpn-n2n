@@ -64,6 +64,8 @@ selfDir = os.path.dirname(os.path.realpath(__file__))
 tmpEtcDhcpDir = os.path.join(tmpDir, "etc-dhcp")
 tmpEnterHook = os.path.join(tmpEtcDhcpDir, "dhclient-enter-hooks")
 tmpExitHook = os.path.join(tmpEtcDhcpDir, "dhclient-exit-hooks")
+pidFile = os.path.join(tmpDir, "dhclient.pid")
+leaseFile = os.path.join(tmpDir, "dhclient.leases")
 proc = None
 
 try:
@@ -79,16 +81,15 @@ try:
         subprocess.check_call(["/bin/mount", "--bind", tmpEtcDhcpDir, "/etc/dhcp"])
 
         cmd = "/sbin/dhclient "
-        cmd += "-d --no-pid "
+        cmd += "-d "
+        cmd += "-df %s " % (pidFile)
         cmd += "-cf %s " % (cfgf)
-        cmd += "-lf %s " % (os.path.join(tmpDir, "dhclient.leases"))
+        cmd += "-lf %s " % (leaseFile)
         cmd += "%s >%s 2>&1" % (vpnIntfName, os.path.join(tmpDir, "dhclient.out"))
 
         proc = subprocess.Popen(cmd, shell=True, universal_newlines=True)
         proc.wait()
-except KeyboardInterrupt:
-    if proc is not None and proc.poll() is None:
-        proc.terminate()
-        proc.wait()
 finally:
+    if os.path.exists(pidFile):
+        os.unlink(pidFile)
     shutil.rmtree(tmpEtcDhcpDir)
