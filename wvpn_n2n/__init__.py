@@ -61,8 +61,9 @@ class _PluginObject:
             self._vpnStop()
             self.logger.info("CASCADE-VPN disconnected.")
         else:
-            GLib.source_remove(self.vpnRestartTimer)
-            self.vpnRestartTimer = None
+            if self.vpnRestartTimer is not None:
+                GLib.source_remove(self.vpnRestartTimer)
+                self.vpnRestartTimer = None
 
     def disconnect(self):
         # disconnect by killing dhclient process, it is faster than killing n2n-edge process
