@@ -6,7 +6,6 @@ import pwd
 import grp
 import time
 import socket
-import signal
 import logging
 import netifaces
 import ipaddress
@@ -216,6 +215,7 @@ class _PluginObject:
                 self._stopDhcpClient()
                 self.dhcpClientProc.wait()
             self.dhcpClientProc = None
+
         if self.vpnIntfName in netifaces.interfaces():
             self._stopEdge()
             while self.vpnIntfName not in netifaces.interfaces():
@@ -247,11 +247,14 @@ class _PluginObject:
         s.close()
 
     def _stopDhcpClient(self):
-        # kill dhclient process, dhcpClientProc would stop too
-        pid = None
-        with open(os.path.join(self.tmpDir, "dhclient.pid"), "r") as f:
-            pid = int(f.read())
-        os.kill(pid, signal.SIGTERM)
+        # use "dhclient -r" to kill dhclient process and release ip address
+        subprocess.Popen([
+            "/usr/bin/python3",
+            os.path.join(os.path.dirname(os.path.realpath(__file__)), "subproc_dhclient_release.py"),
+            self.tmpDir,
+            os.path.join(self.tmpDir, "dhclient.conf"),
+            self.vpnIntfName,
+        ]).wait()
 
 
 class _WaitIpThread(threading.Thread):
