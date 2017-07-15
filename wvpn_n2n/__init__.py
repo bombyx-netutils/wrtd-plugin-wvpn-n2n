@@ -253,6 +253,9 @@ class _PluginObject:
             pid = int(f.read())
         os.kill(pid, signal.SIGTERM)
 
+        # wait for the release packet to be sent out
+        time.sleep(1.0)
+
 
 class _WaitIpThread(threading.Thread):
 
