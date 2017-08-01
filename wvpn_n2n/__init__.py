@@ -214,7 +214,7 @@ class _PluginObject:
 
         if self.vpnIntfName in netifaces.interfaces():
             self._stopEdge()
-            while self.vpnIntfName not in netifaces.interfaces():
+            while self.vpnIntfName in netifaces.interfaces():
                 time.sleep(1.0)
 
     def _vpnUpCallback(self):
