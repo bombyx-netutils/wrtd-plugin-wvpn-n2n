@@ -85,10 +85,6 @@ class _PluginObject:
     def get_interface(self):
         return self.vpnIntfName
 
-    def get_prefix_list(self):
-        netobj = ipaddress.IPv4Network(self.localIp + "/" + self.netmask, strict=False)
-        return [(str(netobj.network_address), str(netobj.netmask))]
-
     def _vpnRestartTimerCallback(self):
         self.logger.info("Establishing CASCADE-VPN connection.")
         try:
